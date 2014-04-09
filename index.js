@@ -7,15 +7,18 @@
 var debug = require('debug')('kpax');
 var util = require('util');
 var isp = util.inspect;
+var EventEmitter = require('events').EventEmitter;
+var _ = require('underscore');
 
 module.exports = function(server, options) {
 
   if (!server) return false;
 
-  function escapeRegExp(string) {
+  function _escapeRegExp(string) {
     return string.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1");
   }
 
+  var reqKeys = ['_hash', '_cache', 'params', 'ts', 'data', 'headers', 'address', 'time', 'xdomain', 'secure', 'issued', 'session', 'user'];
   var verbs = ['get', 'post', 'delete', 'del', 'put', 'head'];
   var kpax = {
     app: {},
@@ -24,6 +27,10 @@ module.exports = function(server, options) {
     pkg: require('./package.json'),
     _events: {}
   };
+
+  kpax.on = function kpaxOn(event, callback) {
+    kpax._events[event] = callback;
+  }
 
   kpax.options.schema = kpax.options.schema || 'kpax:';
 
@@ -40,6 +47,8 @@ module.exports = function(server, options) {
     kpax.io = require('socket.io').listen(server);
   }
 
+  // kpax.io.set('resource', '/test');
+
   // Recommended production settings by default
   kpax.io.enable('browser client minification');
   kpax.io.enable('browser client etag');
@@ -53,11 +62,19 @@ module.exports = function(server, options) {
     , 'jsonp-polling'
   ]);
 
+  //throw new Error('Required option `data` missing');
+
   kpax.io.sockets.on('connection', function(socket) {
 
     debug('new connection', socket.id);
 
+    var handshaken = kpax.io.handshaken[socket.id];
+
+    if (typeof kpax._events['connection'] === 'function')
+      if (false === kpax._events['connection'].call(socket, _.pick(handshaken, reqKeys))) return false;
+
     socket.on('kpax', function(data) {
+      debug('socket kpax', data);
       if (data === Object(data) && data.hasOwnProperty('_hash') && data.hasOwnProperty('_key') && util.isArray(kpax._events[data._key])) {
         var resp = {
           _hash: data._hash,
@@ -66,7 +83,9 @@ module.exports = function(server, options) {
           data: {}
         };
         kpax._events[data._key].forEach(function(fn) {
-          fn.call(socket, data, {
+          fn.call(socket, _.extend(resp, {
+            params: data.params
+          }, _.pick(handshaken, reqKeys)), {
             send: function(respData) {
               resp.data = respData;
               socket.emit(kpax.pkg.name, resp);
@@ -95,7 +114,7 @@ module.exports = function(server, options) {
         arguments = [].slice.call(arguments, 1);
         fn = kpax[verb];
         context = kpax;
-      } else if (new RegExp('^' + escapeRegExp(kpax.options.schema)).test(arguments[0])) {
+      } else if (new RegExp('^' + _escapeRegExp(kpax.options.schema)).test(arguments[0])) {
         arguments[0] = arguments[0].substr(kpax.options.schema.length);
         fn = kpax[verb];
         context = kpax;
