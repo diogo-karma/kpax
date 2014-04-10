@@ -1,6 +1,6 @@
 /*!
  * kpax - v0.0.1
- * Copyright(c) 2014 Dg Nechtan <dnechtan@gmail.com>
+ * Copyright(c) 2014 Dg Nechtan <dnechtan@gmail.com>  (http://nechtan.github.io)
  * MIT Licensed
  */
 
@@ -19,6 +19,7 @@ module.exports = function(server, options) {
   }
 
   var reqKeys = ['_hash', '_cache', 'params', 'ts', 'data', 'headers', 'address', 'time', 'xdomain', 'secure', 'issued', 'session', 'user'];
+
   var verbs = ['get', 'post', 'delete', 'del', 'put', 'head'];
   var kpax = {
     app: {},
@@ -82,15 +83,17 @@ module.exports = function(server, options) {
           ts: +new Date(),
           data: {}
         };
+        var res = {
+          send: function(respData) {
+            resp.data = respData;
+            socket.emit(kpax.pkg.name, _.omit(resp, 'headers', 'adddress', 'xdomain', 'session', 'user', 'address'));
+          }
+        };
+        res.json = res.emit = res.send;
         kpax._events[data._key].forEach(function(fn) {
           fn.call(socket, _.extend(resp, {
             params: data.params
-          }, _.pick(handshaken, reqKeys)), {
-            send: function(respData) {
-              resp.data = respData;
-              socket.emit(kpax.pkg.name, resp);
-            }
-          });
+          }, _.pick(handshaken, reqKeys)), res);
         });
       }
     });
