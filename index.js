@@ -19,7 +19,6 @@ module.exports = function(server, options) {
   }
 
   var reqKeys = ['_hash', '_cache', 'params', 'ts', 'data', 'headers', 'address', 'time', 'xdomain', 'secure', 'issued', 'session', 'user'];
-
   var verbs = ['get', 'post', 'delete', 'del', 'put', 'head'];
   var kpax = {
     app: {},
@@ -35,8 +34,10 @@ module.exports = function(server, options) {
 
   kpax.options.schema = kpax.options.schema || 'kpax:';
 
-  // support for ExpressJS
-  if (!kpax.options.app && server._events && server._events.request && server._events.request.name === 'app') {
+  // support for ExpressJS >=3.x.x
+  if (!kpax.options.app && server._events && server._events.request &&
+    /\(req,\ res,\ next\)/.test(server._events.request.toString()) &&
+    (server._events.request['get'] && server._events.request['post'])) {
     kpax.app = server._events.request
   }
 
@@ -47,8 +48,6 @@ module.exports = function(server, options) {
   } else {
     kpax.io = require('socket.io').listen(server);
   }
-
-  // kpax.io.set('resource', '/test');
 
   // Recommended production settings by default
   kpax.io.enable('browser client minification');
@@ -62,8 +61,6 @@ module.exports = function(server, options) {
     , 'xhr-polling'
     , 'jsonp-polling'
   ]);
-
-  //throw new Error('Required option `data` missing');
 
   kpax.io.sockets.on('connection', function(socket) {
 
@@ -102,6 +99,8 @@ module.exports = function(server, options) {
 
   var $verb = function $verb(verb, key, callback) {
     debug('add verb', verb, key);
+    if (!key) throw new Error('Required param `key` missing');
+    if (!callback) throw new Error('Required param `callback` missing');
     if (!util.isArray(kpax._events[verb + ':' + key]))
       kpax._events[verb + ':' + key] = [];
     kpax._events[verb + ':' + key].push(callback);
