@@ -1,24 +1,21 @@
 /*!
  * kpax - v0.0.1
- * Copyright(c) 2014 Dg Nechtan <dnechtan@gmail.com>  (http://nechtan.github.io)
+ * Copyright(c) 2014 Dg Nechtan <dnechtan@gmail.com>
  * MIT Licensed
  */
 
 var debug = require('debug')('kpax');
 var util = require('util');
 var isp = util.inspect;
-var EventEmitter = require('events').EventEmitter;
-var _ = require('underscore');
 
 module.exports = function(server, options) {
 
   if (!server) return false;
 
-  function _escapeRegExp(string) {
+  function escapeRegExp(string) {
     return string.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1");
   }
 
-  var reqKeys = ['_hash', '_cache', 'params', 'ts', 'data', 'headers', 'address', 'time', 'xdomain', 'secure', 'issued', 'session', 'user'];
   var verbs = ['get', 'post', 'delete', 'del', 'put', 'head'];
   var kpax = {
     app: {},
@@ -28,16 +25,10 @@ module.exports = function(server, options) {
     _events: {}
   };
 
-  kpax.on = function kpaxOn(event, callback) {
-    kpax._events[event] = callback;
-  }
-
   kpax.options.schema = kpax.options.schema || 'kpax:';
 
-  // support for ExpressJS >=3.x.x
-  if (!kpax.options.app && server._events && server._events.request &&
-    /\(req,\ res,\ next\)/.test(server._events.request.toString()) &&
-    (server._events.request['get'] && server._events.request['post'])) {
+  // support for ExpressJS
+  if (!kpax.options.app && server._events && server._events.request && server._events.request.name === 'app') {
     kpax.app = server._events.request
   }
 
@@ -66,13 +57,7 @@ module.exports = function(server, options) {
 
     debug('new connection', socket.id);
 
-    var handshaken = kpax.io.handshaken[socket.id];
-
-    if (typeof kpax._events['connection'] === 'function')
-      if (false === kpax._events['connection'].call(socket, _.pick(handshaken, reqKeys))) return false;
-
     socket.on('kpax', function(data) {
-      debug('socket kpax', data);
       if (data === Object(data) && data.hasOwnProperty('_hash') && data.hasOwnProperty('_key') && util.isArray(kpax._events[data._key])) {
         var resp = {
           _hash: data._hash,
@@ -80,17 +65,16 @@ module.exports = function(server, options) {
           ts: +new Date(),
           data: {}
         };
-        var res = {
-          send: function(respData) {
-            resp.data = respData;
-            socket.emit(kpax.pkg.name, _.omit(resp, 'headers', 'adddress', 'xdomain', 'session', 'user', 'address'));
-          }
-        };
-        res.json = res.emit = res.send;
+        data.params = data.params || {};
         kpax._events[data._key].forEach(function(fn) {
-          fn.call(socket, _.extend(resp, {
-            params: data.params
-          }, _.pick(handshaken, reqKeys)), res);
+          fn.call(socket, data, {
+            send: function(respData, params) {
+              resp.data = respData;
+              resp.params = params || {};
+              debug('kpax.pkg.name', kpax.pkg.name, 'resp', resp, 'params', params);
+              socket.emit(kpax.pkg.name, resp);
+            }
+          });
         });
       }
     });
@@ -99,8 +83,6 @@ module.exports = function(server, options) {
 
   var $verb = function $verb(verb, key, callback) {
     debug('add verb', verb, key);
-    if (!key) throw new Error('Required param `key` missing');
-    if (!callback) throw new Error('Required param `callback` missing');
     if (!util.isArray(kpax._events[verb + ':' + key]))
       kpax._events[verb + ':' + key] = [];
     kpax._events[verb + ':' + key].push(callback);
@@ -116,7 +98,7 @@ module.exports = function(server, options) {
         arguments = [].slice.call(arguments, 1);
         fn = kpax[verb];
         context = kpax;
-      } else if (new RegExp('^' + _escapeRegExp(kpax.options.schema)).test(arguments[0])) {
+      } else if (new RegExp('^' + escapeRegExp(kpax.options.schema)).test(arguments[0])) {
         arguments[0] = arguments[0].substr(kpax.options.schema.length);
         fn = kpax[verb];
         context = kpax;
@@ -126,6 +108,7 @@ module.exports = function(server, options) {
   });
 
   kpax.app.kpax = kpax;
+  kpax.client = require('./client');
 
   return kpax;
 
