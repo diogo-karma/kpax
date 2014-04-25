@@ -1,5 +1,5 @@
 /*!
- * kpax v0.0.1 client
+ * kpax v0.0.2 client
  * Copyright(C) 2014 Dg Nechtan <dnechtan@gmail.com> (http://nechtan.github.io)
  */
 
