@@ -1,4 +1,4 @@
-kpax - v0.0.2alpha
+kpax - v0.0.1alpha
 ====
 
 Ultralight and fastest RESTful for NodeJS/Express/AngularJS
