@@ -1,5 +1,5 @@
 /*!
- * kpax - v0.0.2
+ * kpax - v0.0.3
  * Copyright(c) 2014 Dg Nechtan <dnechtan@gmail.com>
  * MIT Licensed
  */
@@ -9,6 +9,7 @@ var util = require('util');
 var isp = util.inspect;
 var pkg = require('./package.json');
 var _ = require('underscore');
+
 module.exports = function (server, options) {
 
   if (!server) return false;
@@ -23,7 +24,9 @@ module.exports = function (server, options) {
       Math.random().toString(36));
   }
 
-  var verbs = ['get', 'post', 'delete', 'del', 'put', 'head'];
+  var iVerbs = ['get', 'head'];
+  var oVerbs = ['post', 'delete', 'del', 'put'];
+  var verbs = iVerbs.concat(oVerbs);
   var kpax = {
     app: {},
     ios: {},
@@ -63,59 +66,117 @@ module.exports = function (server, options) {
   ]);
 
   kpax.getSocket = function ($io) {
-    var socket = null;
+    var socket = [];
     if (kpax.ios.hasOwnProperty($io)) {
-      socket = kpax.ios[$io];
+      return [kpax.ios[$io]];
     }
     if (kpax.ioids.hasOwnProperty($io)) {
-      socket = kpax.ioids[$io];
+      sockets = kpax.ioids[$io];
+      for (var s, x = 0; x < sockets.length; x++) {
+        if (s = kpax.ios[sockets[x]]) {
+          // debug('socket found', x, s, s.socket['connected']);
+          // if (s.hasOwnProperty('socket') && s.socket['connected']) {
+          debug('socket connected', x);
+          socket.push(s);
+          // } else {
+          //   debug('socket disconnected', x, 'sliced');
+          //   kpax.ioids[$io].slice(x, 1);
+          // }
+        }
+      }
     }
     return socket;
   }
 
   kpax.io.sockets.on('connection', function (socket) {
 
+    var cIndentify = null;
+
     debug('new connection', socket.id);
 
     kpax.ios[socket.id] = socket;
 
-    socket.emit('kpax:socket', {
+    socket.on('disconnect', function () {
+      debug('socket disconnected', socket.id, cIndentify);
+      if (util.isArray(kpax.ioids[cIndentify])) {
+        for (var x = kpax.ioids[cIndentify].length; x--;) {
+          if (kpax.ioids[cIndentify][x] === socket.id) {
+            kpax.ioids[cIndentify].splice(x, 1);
+          }
+        }
+      }
+    });
+
+    socket.emit('kpax:connect', {
       id: socket.id
     });
 
     socket.on('kpax:identify', function (data) {
-      debug('identify', socket.id, ' to id: ', data);
-      kpax.ioids['' + data] = socket;
+      if (!util.isArray(kpax.ioids[(cIndentify = '' + data)])) {
+        kpax.ioids[cIndentify] = [];
+      }
+      kpax.ioids[cIndentify].push(socket.id);
+      debug('identify', socket.id, 'to id:', cIndentify, 'all:', kpax.ioids[cIndentify]);
     });
 
     socket.on('kpax', function (data) {
+
       debug('new kpax data', data);
+      debug('all functions cb', kpax.fn);
+
       var req = socket.manager.handshaken[socket.id];
+
       if (data === Object(data)) {
+
         data = _.extend({
           params: {},
           data: {}
         }, data);
-        if (data.hasOwnProperty('to')) {
+
+        // redirect data to socket
+        if (data['to']) {
+          debug('data to', data.to);
+          var nhash = socket.id + ':' + data._hash;
+          var ndata = {
+            _hash: nhash,
+            _key: data._key,
+            _cache: data['_cache'] || false,
+            ts: +new Date(),
+            data: data['data'] || {},
+            params: data['params'] || {},
+          };
+          ndata.complete = function(req, res) {
+            req._hash = data._hash;
+            debug('triangle callback ndata', req);
+            socket.emit('kpax', req);
+          }
           if (data.to === 'all') {
+            debug('data to all', kpax.ios.length);
             for (var x in kpax.ios) {
-              kpax.emit(kpax.ios[x], data);
+              kpax.emit(kpax.ios[x], ndata);
             }
-          } else {
-            kpax.emit(data.to, data);
+          }
+          if (kpax.ioids[data.to]) {
+            kpax.emit(data.to, ndata);
           }
         }
-        if (data.hasOwnProperty('_hash') && kpax.fn.hasOwnProperty(data._hash) && typeof kpax.fn[data._hash] === 'function') {
+
+        // local request
+        if (data.hasOwnProperty('_hash') && util.isArray(kpax.fn[data._hash])) {
           var _emit = function (data) {
             socket.emit(data);
           }
-          kpax.fn[data._hash].call(socket, data, {
-            send: _emit,
-            json: _emit,
-            emit: _emit
-          });
+          for (var x = 0, m = kpax.fn[data._hash].length; x < m; x++) {
+            kpax.fn[data._hash][x].call(socket, data, {
+              send: _emit,
+              json: _emit,
+              emit: _emit
+            });
+          }
           return (kpax.fn[data._hash] = null) === null;
         }
+
+        // remote request
         if (data.hasOwnProperty('_hash') && data.hasOwnProperty('_key') && util.isArray(kpax._events[data._key])) {
           var resp = {
             _hash: data._hash,
@@ -124,16 +185,17 @@ module.exports = function (server, options) {
             data: {}
           };
           data = _.extend(data, req);
-          kpax._events[data._key].forEach(function (fn) {
-            fn.call(socket, data, {
+          for (var x = 0, m = kpax._events[data._key].length; x < m; x++) {
+            kpax._events[data._key][x].call(socket, data, {
               send: function (respData, params) {
                 resp.data = respData;
                 resp.params = params || {};
                 socket.emit(kpax.pkg.name, resp);
               }
             });
-          });
+          }
         }
+
       }
     });
 
@@ -149,11 +211,14 @@ module.exports = function (server, options) {
   var $emit = function $emit($io, verb, key, data, params, callback) {
     var hash = null;
     var _key = null;
-    var socket = kpax.getSocket($io);
+    var sockets = kpax.getSocket($io);
 
     debug('$emit', verb, key, data, params, callback);
 
-    if (!socket) return false;
+    if (!util.isArray(sockets) || sockets.length < 1) return false;
+
+    if (_.isFunction(callback)) callback = [callback];
+    if (!callback) callback = [];
 
     if (typeof verb === 'object') {
       if (verb.hasOwnProperty('_key')) {
@@ -168,13 +233,19 @@ module.exports = function (server, options) {
       if (verb.hasOwnProperty('data')) {
         data = verb.data;
       }
-      callback = function (req, res) {
-        debug('callback for emit.to', req, res);
+      if (verb.hasOwnProperty('success')) {
+        callback.push(verb.success);
+      }
+      if (_.isFunction(key)) {
+        callback.push(key);
+      }
+      if (verb.hasOwnProperty('complete')) {
+        callback.push(verb.complete);
       }
     }
 
-    if (typeof params === 'function') {
-      callback = params;
+    if (_.isFunction(params)) {
+      callback.push(params);
       params = {};
     }
 
@@ -182,13 +253,27 @@ module.exports = function (server, options) {
       hash = newHash();
     }
 
-    kpax.fn[hash] = callback || angular.noop;
-    socket.emit('kpax', {
-      _hash: hash,
-      _key: _key || (verb + ':' + key),
-      params: params || {},
-      data: data || {}
-    });
+    kpax.fn[hash] = callback;
+
+    debug('fn[hash]', hash, kpax.fn[hash]);
+
+    for (var x = 0; x < sockets.length; x++) {
+      if (sockets[x] && _.isFunction(sockets[x]['emit'])) {
+        debug('sockets[x]', x, sockets[x].id, {
+          _hash: hash,
+          _key: _key || (verb + ':' + key),
+          params: params || {},
+          data: data || {}
+        });
+        sockets[x].emit('kpax', {
+          _hash: hash,
+          _key: _key || (verb + ':' + key),
+          params: params || {},
+          data: data || {}
+        });
+      }
+    }
+
   };
 
   verbs.map(function (verb) {

@@ -1,6 +1,6 @@
 {
   "name": "kpax",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "description": "Ultralight and fastest RESTful",
   "main": "index.js",
   "repository": {
