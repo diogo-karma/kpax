@@ -32,7 +32,7 @@
     "hiredis": "^0.1.16",
     "underscore": "^1.6.0"
   },
-  "readme": "kpax - v0.0.1alpha\n====\n\nUltralight and fastest RESTful for NodeJS/Express/AngularJS\n\nInstalation:\n```bash\n$ npm install --save kpax\n```\n\n**Copyright (c) 2014 Dg Nechtan**\n",
+  "readme": "kpax\n====\n\nUltralight and fastest RESTful for NodeJS/Express/AngularJS\n\nInstalation:\n```bash\n$ npm install --save kpax\n```\n\n**Copyright (c) 2014 Dg Nechtan**\n",
   "readmeFilename": "README.md",
   "_id": "kpax@0.0.3",
   "_from": "kpax@0.0.3"
