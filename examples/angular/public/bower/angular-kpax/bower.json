@@ -1,0 +1,29 @@
+{
+  "name": "angular-kpax",
+  "version": "0.0.5",
+  "authors": [
+    "Nechtan <dnechtan@gmail.com>"
+  ],
+  "description": "Angular-Kpax - AngularJS factory for Kpax",
+  "main": "angular-kpax.js",
+  "keywords": [
+    "angular",
+    "kpax",
+    "socket.io",
+    "rest",
+    "resource"
+  ],
+  "license": "MIT",
+  "homepage": "http://nechtan.github.io/kpax",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "angular": "~1.2.13",
+    "socket.io-client": "~0.9.16"
+  }
+}

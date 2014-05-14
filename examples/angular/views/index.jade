@@ -1,0 +1,11 @@
+extends layout
+
+block content
+  h1
+    | KPAX - 
+    small= title
+  p items
+
+  ul
+    li(ng-repeat='item in items')
+      {{ item.id }} / {{ item.name }}

@@ -1,0 +1,22 @@
+doctype html
+html(ng-app='myApp')
+  head
+    title= title
+    link(rel='stylesheet', href='/stylesheets/style.css')
+  body
+    #main(ng-controller='myController')
+      block content
+
+    script(src='/bower/angular/angular.min.js')
+    script(src='/bower/socket.io-client/dist/socket.io.min.js')
+    script(src='/bower/angular-kpax/angular-kpax.js')
+    script.
+      var myApp = angular.module('myApp', ['ngKpax']);
+      myApp.controller('myController', [
+        '$scope', 'kpax',
+        function ($scope, kpax) {
+          kpax.get({url: '/items', success: function(data) {
+            $scope.items = data;
+          }});
+        }
+      ]);

@@ -1,8 +1,8 @@
 {
   "name": "kpax",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Ultralight and fastest RESTful",
-  "main": "index.js",
+  "main": "kpax.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/nechtan/kpax.git"
@@ -34,6 +34,6 @@
   },
   "readme": "kpax - v0.0.1alpha\n====\n\nUltralight and fastest RESTful for NodeJS/Express/AngularJS\n\nInstalation:\n```bash\n$ npm install --save kpax\n```\n\n**Copyright (c) 2014 Dg Nechtan**\n",
   "readmeFilename": "README.md",
-  "_id": "kpax@0.0.1",
-  "_from": "kpax@"
+  "_id": "kpax@0.0.3",
+  "_from": "kpax@0.0.3"
 }

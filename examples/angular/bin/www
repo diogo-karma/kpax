@@ -1,0 +1,26 @@
+#!/usr/bin/env node
+
+var debug = require('debug')('kpax-example-www');
+var app = require('../app');
+var server = require('http').createServer(app);
+var kpax = require('../..')(server);
+
+app.set('port', process.env.PORT || 3000);
+
+kpax.get('/items', function(req, res) {
+  debug(req, res);
+  res.send([{
+    id: 1,
+    name: "Dg"
+  }, {
+    id: 2,
+    name: 'hax0r'
+  }, {
+    id: 3,
+    name: 'kpax'
+  }])
+});
+
+server.listen(app.get('port'), function() {
+  debug('Express server listening on port ' + server.address().port);
+});
