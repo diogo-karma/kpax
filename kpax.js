@@ -1,5 +1,5 @@
 /*!
- * kpax - v0.0.4
+ * kpax - v0.0.5
  * Copyright(c) 2014 Dg Nechtan <dnechtan@gmail.com>
  * MIT Licensed
  */
@@ -9,7 +9,6 @@ var util = require('util');
 var isp = util.inspect;
 var pkg = require('./package.json');
 var _ = require('underscore');
-var EventEmitter = require('events').EventEmitter;
 
 module.exports = function(server, options) {
 
@@ -21,35 +20,37 @@ module.exports = function(server, options) {
 
   function newHash(prefix) {
     return '_'.concat(prefix || '',
-      new Date() * (pkg.version + Math.random()).replace(/\D/g, ''),
+      Math.abs(Math.random() * Math.random() * Date.now() | 0),
+      new Date() * Math.random(),
       Math.random().toString(36));
-  }
-
-  function hasOP(obj, key) {
-    return Object.prototype.hasOwnProperty.call(obj, key)
   }
 
   var iVerbs = ['get', 'head'];
   var oVerbs = ['post', 'delete', 'del', 'put'];
   var verbs = iVerbs.concat(oVerbs);
+  var cHeaders = {};
+  var headerParser = null;
   var kpax = {
     app: {},
     ios: {},
     ioids: {},
     fn: {},
-    events: new EventEmitter,
-    options: options || {},
+    options: _.extend({
+        forceParsedHeader: false,
+        schema: 'kpax:'
+      },
+      options || {}),
     pkg: require('./package.json'),
-    _events: {}
+    _events: {},
+    _offs: []
   };
 
-  kpax.options.schema = kpax.options.schema || 'kpax:';
+  kpax.registerHeaderParser = function(fn) {
+    headerParser = fn;
+  };
 
   // support for ExpressJS
-  if (!hasOP(kpax.options, 'app') &&
-    hasOP(server, '_events') &&
-    hasOP(server._events, 'request') &&
-    server._events.request['name'] === 'app') {
+  if (!kpax.options.app && server._events && server._events.request && server._events.request.name === 'app') {
     kpax.app = server._events.request
   }
 
@@ -58,7 +59,6 @@ module.exports = function(server, options) {
     kpax.io = kpax.options.io;
     if (!kpax.io.sockets) kpax.io = kpax.io.listen(server);
   } else {
-    debug('Socket.io undefinied');
     kpax.io = require('socket.io').listen(server);
   }
 
@@ -71,6 +71,14 @@ module.exports = function(server, options) {
     'websocket', 'flashsocket', 'htmlfile', 'xhr-polling', 'jsonp-polling'
   ]);
 
+  debug('kpax with options', kpax.options);
+
+  kpax.onDisconnect = function(fn) {
+    if (_.isFunction(fn)) {
+      kpax._offs.push(fn);
+    }
+  }
+
   kpax.getSocket = function($io) {
     var socket = [];
     if (kpax.ios.hasOwnProperty($io)) {
@@ -80,8 +88,14 @@ module.exports = function(server, options) {
       sockets = kpax.ioids[$io];
       for (var s, x = 0; x < sockets.length; x++) {
         if (s = kpax.ios[sockets[x]]) {
+          // debug('socket found', x, s, s.socket['connected']);
+          // if (s.hasOwnProperty('socket') && s.socket['connected']) {
           debug('socket connected', x);
           socket.push(s);
+          // } else {
+          //   debug('socket disconnected', x, 'sliced');
+          //   kpax.ioids[$io].slice(x, 1);
+          // }
         }
       }
     }
@@ -90,18 +104,33 @@ module.exports = function(server, options) {
 
   kpax.io.sockets.on('connection', function(socket) {
 
-    var cIdentify = null;
+    var cIndentify = null;
 
     debug('new connection', socket.id);
 
     kpax.ios[socket.id] = socket;
 
+    if (socket.manager.handshaken[socket.id]) {
+      cHeaders[socket.id] = socket.manager.handshaken[socket.id];
+      if (_.isFunction(headerParser)) {
+        headerParser(socket.manager.handshaken[socket.id], function(header) {
+          // debug('new header connection', header);
+          cHeaders[socket.id] = header;
+        });
+      }
+    }
+
     socket.on('disconnect', function() {
-      debug('socket disconnected', socket.id, cIdentify);
-      if (util.isArray(kpax.ioids[cIdentify])) {
-        for (var x = kpax.ioids[cIdentify].length; x--;) {
-          if (kpax.ioids[cIdentify][x] === socket.id) {
-            kpax.ioids[cIdentify].splice(x, 1);
+      debug('socket disconnected', socket.id, cIndentify);
+      if (util.isArray(kpax._offs)) {
+        for (var x = 0; x < kpax._offs.length; x++) {
+          kpax._offs[x](kpax.ioids[cIndentify], cHeaders[socket.id]);
+        }
+      }
+      if (util.isArray(kpax.ioids[cIndentify])) {
+        for (var x = kpax.ioids[cIndentify].length; x--;) {
+          if (kpax.ioids[cIndentify][x] === socket.id) {
+            kpax.ioids[cIndentify].splice(x, 1);
           }
         }
       }
@@ -112,18 +141,19 @@ module.exports = function(server, options) {
     });
 
     socket.on('kpax:identify', function(data) {
-      if (!util.isArray(kpax.ioids[(cIdentify = '' + data)])) {
-        kpax.ioids[cIdentify] = [];
+      if (!util.isArray(kpax.ioids[(cIndentify = '' + data)])) {
+        kpax.ioids[cIndentify] = [];
       }
-      kpax.ioids[cIdentify].push(socket.id);
-      debug('identify', socket.id, 'to id:', cIdentify, 'all:', kpax.ioids[cIdentify]);
+      kpax.ioids[cIndentify].push(socket.id);
+      debug('identify', socket.id, 'to id:', cIndentify, 'all:', kpax.ioids[cIndentify]);
     });
 
     socket.on('kpax', function(data) {
 
-      debug('new kpax data', data);
+      // debug('new kpax data', data);
+      // debug('all functions cb', kpax.fn);
 
-      var req = socket.manager.handshaken[socket.id];
+      var req = cHeaders[socket.id];
 
       if (data === Object(data)) {
 
@@ -134,7 +164,9 @@ module.exports = function(server, options) {
 
         // redirect data to socket
         if (data['to']) {
+
           debug('data to', data.to);
+
           var nhash = socket.id + ':' + data._hash;
           var ndata = {
             _hash: nhash,
@@ -142,11 +174,14 @@ module.exports = function(server, options) {
             _cache: data['_cache'] || false,
             ts: +new Date(),
             data: data['data'] || {},
-            identify: cIdentify,
             params: data['params'] || {},
+            from: req,
+            from_socket: socket.id,
+            to: data.to
           };
           ndata.complete = function(req, res) {
             req._hash = data._hash;
+            // debug('triangle callback ndata', req);
             socket.emit('kpax', req);
           }
           if (data.to === 'all') {
@@ -210,8 +245,10 @@ module.exports = function(server, options) {
   var $emit = function $emit($io, verb, key, data, params, callback) {
     var hash = null;
     var _key = null;
+    var from = {};
+    var from_socket = null;
+    var fromTo = false;
     var sockets = kpax.getSocket($io);
-    var cIdentify = null;
 
     debug('$emit', verb, key, data, params, callback);
 
@@ -221,8 +258,13 @@ module.exports = function(server, options) {
     if (!callback) callback = [];
 
     if (typeof verb === 'object') {
+      fromTo = !!verb['to'];
       if (verb.hasOwnProperty('_key')) {
         _key = verb._key;
+      }
+      if (verb.hasOwnProperty('from')) {
+        from = verb.from;
+        from_socket = verb['from_socket'];
       }
       if (verb.hasOwnProperty('_hash')) {
         hash = verb._hash;
@@ -242,9 +284,6 @@ module.exports = function(server, options) {
       if (verb.hasOwnProperty('complete')) {
         callback.push(verb.complete);
       }
-      if (verb.hasOwnProperty('identify')) {
-        cIdentify = verb.identify;
-      }
     }
 
     if (_.isFunction(params)) {
@@ -258,17 +297,34 @@ module.exports = function(server, options) {
 
     kpax.fn[hash] = callback;
 
-    debug('fn[hash]', hash, kpax.fn[hash]);
+    // debug('fn[hash]', hash, kpax.fn[hash]);
+    var toSendData, x;
 
-    for (var x = 0; x < sockets.length; x++) {
-      if (sockets[x] && _.isFunction(sockets[x]['emit'])) {
-        sockets[x].emit('kpax', {
-          _hash: hash,
-          _key: _key || (verb + ':' + key),
-          identify: cIdentify,
-          params: params || {},
-          data: data || {}
-        });
+    if (from_socket && kpax.options.forceParsedHeader && (!cHeaders[from_socket] || (!cHeaders[from_socket]['user'] || !cHeaders[from_socket].user['_id']))) {
+      debug('FORCED header connection');
+      headerParser(cHeaders[from_socket], function(header) {
+        debug('parsed', 12039210931029301923, header);
+        cHeaders[from_socket] = header;
+        from = header;
+        socketEmit();
+      });
+    } else {
+      socketEmit();
+    }
+
+    function socketEmit() {
+      for (var x = 0; x < sockets.length; x++) {
+        if (sockets[x] && _.isFunction(sockets[x]['emit'])) {
+          toSendData = _.extend(cHeaders[sockets[x].id], {
+            _hash: hash,
+            _key: _key || (verb + ':' + key),
+            params: params || {},
+            data: data || {},
+            from: from
+          });
+          debug('sockets[x]', x, sockets[x].id, toSendData);
+          sockets[x].emit('kpax', toSendData);
+        }
       }
     }
 

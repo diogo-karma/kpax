@@ -1,6 +1,6 @@
 {
   "name": "kpax",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Ultralight and fastest RESTful",
   "main": "kpax.js",
   "repository": {
@@ -32,8 +32,12 @@
     "hiredis": "^0.1.16",
     "underscore": "^1.6.0"
   },
-  "readme": "kpax\n====\n\nUltralight and fastest RESTful for NodeJS/Express/AngularJS\n\nInstalation:\n```bash\n$ npm install --save kpax\n```\n\n**Copyright (c) 2014 Dg Nechtan**\n",
+  "readme": "kpax - v0.0.1alpha\n====\n\nUltralight and fastest RESTful for NodeJS/Express/AngularJS\n\nInstalation:\n```bash\n$ npm install --save kpax\n```\n\n**Copyright (c) 2014 Dg Nechtan**\n",
   "readmeFilename": "README.md",
   "_id": "kpax@0.0.3",
-  "_from": "kpax@0.0.3"
+  "_from": "kpax@0.0.3",
+  "dist": {
+    "shasum": "d74347bc66dc1be9541932efb58c905b095ddb21"
+  },
+  "_resolved": "https://registry.npmjs.org/kpax/-/kpax-0.0.3.tgz"
 }
